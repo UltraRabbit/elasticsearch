@@ -115,10 +115,14 @@ public class IndexFieldDataService extends AbstractIndexComponent {
     }
 
     public <IFD extends IndexFieldData> IFD getForField(FieldMapper mapper) {
-        return getForField(mapper.names(), mapper.fieldDataType());
+        return (IFD) innerGetForField(mapper.names(), mapper.fieldDataType());
     }
 
     public <IFD extends IndexFieldData> IFD getForField(FieldMapper.Names fieldNames, FieldDataType type) {
+        return (IFD) innerGetForField(fieldNames, type);
+    }
+
+    private Object innerGetForField(FieldMapper.Names fieldNames, FieldDataType type) {
         IndexFieldData fieldData = loadedFieldData.get(fieldNames.indexName());
         if (fieldData == null) {
             synchronized (loadedFieldData) {
@@ -158,6 +162,6 @@ public class IndexFieldDataService extends AbstractIndexComponent {
                 }
             }
         }
-        return (IFD) fieldData;
+        return fieldData;
     }
 }

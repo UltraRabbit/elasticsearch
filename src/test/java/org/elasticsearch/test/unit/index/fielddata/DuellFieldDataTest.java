@@ -114,7 +114,7 @@ public class DuellFieldDataTest extends AbstractFieldDataTests {
                 right = left = list.remove(0);
             }
             ifdService.clear();
-            IndexFieldData leftFieldData = ifdService.getForField(new FieldMapper.Names(left.getValue().name().toLowerCase(Locale.ROOT)),
+            IndexFieldData leftFieldData = (IndexFieldData) ifdService.getForField(new FieldMapper.Names(left.getValue().name().toLowerCase(Locale.ROOT)),
                     left.getKey());
             ifdService.clear();
             IndexFieldData rightFieldData = ifdService.getForField(new FieldMapper.Names(right.getValue().name().toLowerCase(Locale.ROOT)),

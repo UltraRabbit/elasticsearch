@@ -44,7 +44,7 @@ public abstract class AbstractFieldDataTests {
     protected abstract FieldDataType getFieldDataType();
 
     public <IFD extends IndexFieldData> IFD getForField(String fieldName) {
-        return ifdService.getForField(new FieldMapper.Names(fieldName), getFieldDataType());
+        return (IFD)ifdService.getForField(new FieldMapper.Names(fieldName), getFieldDataType());
     }
 
     @BeforeMethod
