@@ -24,25 +24,23 @@ import org.apache.lucene.analysis.NumericTokenStream.NumericTermAttribute;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.elasticsearch.index.analysis.NumericDoubleAnalyzer;
-import org.testng.annotations.Test;
+import org.elasticsearch.test.integration.ElasticsearchTestCase;
+import org.junit.Test;
 
 import java.io.IOException;
-import java.io.StringReader;
-import java.util.Random;
 
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
-public class NumericAnalyzerTests {
+public class NumericAnalyzerTests extends ElasticsearchTestCase {
 
     @Test
     public void testAttributeEqual() throws IOException {
         final int precisionStep = 8;
-        final double value = new Random().nextDouble();
+        final double value = randomDouble();
         NumericDoubleAnalyzer analyzer = new NumericDoubleAnalyzer(precisionStep);
 
-        final TokenStream ts1 = analyzer.tokenStream("dummy", new StringReader(String.valueOf(value)));
+        final TokenStream ts1 = analyzer.tokenStream("dummy", String.valueOf(value));
         final NumericTokenStream ts2 = new NumericTokenStream(precisionStep);
         ts2.setDoubleValue(value);
         final NumericTermAttribute numTerm1 = ts1.addAttribute(NumericTermAttribute.class);

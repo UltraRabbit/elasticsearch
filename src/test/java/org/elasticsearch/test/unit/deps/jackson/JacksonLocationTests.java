@@ -19,9 +19,12 @@
 
 package org.elasticsearch.test.unit.deps.jackson;
 
-import com.fasterxml.jackson.core.*;
-import org.elasticsearch.common.io.FastByteArrayOutputStream;
-import org.testng.annotations.Test;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import org.elasticsearch.common.io.stream.BytesStreamOutput;
+import org.junit.Test;
 
 import java.io.IOException;
 
@@ -41,8 +44,8 @@ public class JacksonLocationTests {
         //         value : "something"
         //    }
         // }
-        FastByteArrayOutputStream os = new FastByteArrayOutputStream();
-        JsonGenerator gen = new JsonFactory().createJsonGenerator(os, JsonEncoding.UTF8);
+        BytesStreamOutput os = new BytesStreamOutput();
+        JsonGenerator gen = new JsonFactory().createGenerator(os);
         gen.writeStartObject();
 
         gen.writeStringField("index", "test");
@@ -57,7 +60,7 @@ public class JacksonLocationTests {
         gen.close();
 
         byte[] data = os.bytes().toBytes();
-        JsonParser parser = new JsonFactory().createJsonParser(data);
+        JsonParser parser = new JsonFactory().createParser(data);
 
         assertThat(parser.nextToken(), equalTo(JsonToken.START_OBJECT));
         assertThat(parser.nextToken(), equalTo(JsonToken.FIELD_NAME)); // "index"

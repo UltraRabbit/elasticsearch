@@ -20,8 +20,9 @@
 package org.elasticsearch.index.fielddata.plain;
 
 import org.apache.lucene.util.FixedBitSet;
-import org.elasticsearch.common.RamUsage;
+import org.apache.lucene.util.RamUsageEstimator;
 import org.elasticsearch.common.geo.GeoPoint;
+import org.elasticsearch.common.util.BigDoubleArrayList;
 import org.elasticsearch.index.fielddata.AtomicGeoPointFieldData;
 import org.elasticsearch.index.fielddata.BytesValues;
 import org.elasticsearch.index.fielddata.GeoPointValues;
@@ -34,15 +35,11 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
     public static final GeoPointDoubleArrayAtomicFieldData EMPTY = new Empty();
 
-    protected final double[] lon;
-    protected final double[] lat;
     private final int numDocs;
 
     protected long size = -1;
 
-    public GeoPointDoubleArrayAtomicFieldData(double[] lon, double[] lat, int numDocs) {
-        this.lon = lon;
-        this.lat = lat;
+    public GeoPointDoubleArrayAtomicFieldData(int numDocs) {
         this.numDocs = numDocs;
     }
 
@@ -63,7 +60,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
     static class Empty extends GeoPointDoubleArrayAtomicFieldData {
 
         Empty() {
-            super(null, null, 0);
+            super(0);
         }
 
         @Override
@@ -99,10 +96,13 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
     public static class WithOrdinals extends GeoPointDoubleArrayAtomicFieldData {
 
+        private final BigDoubleArrayList lon, lat;
         private final Ordinals ordinals;
 
-        public WithOrdinals(double[] lon, double[] lat, int numDocs, Ordinals ordinals) {
-            super(lon, lat, numDocs);
+        public WithOrdinals(BigDoubleArrayList lon, BigDoubleArrayList lat, int numDocs, Ordinals ordinals) {
+            super(numDocs);
+            this.lon = lon;
+            this.lat = lat;
             this.ordinals = ordinals;
         }
 
@@ -119,7 +119,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
         @Override
         public long getMemorySizeInBytes() {
             if (size == -1) {
-                size = RamUsage.NUM_BYTES_INT/*size*/ + RamUsage.NUM_BYTES_INT/*numDocs*/ + (RamUsage.NUM_BYTES_ARRAY_HEADER + (lon.length * RamUsage.NUM_BYTES_DOUBLE)) + (RamUsage.NUM_BYTES_ARRAY_HEADER + (lat.length * RamUsage.NUM_BYTES_DOUBLE)) + ordinals.getMemorySizeInBytes();
+                size = RamUsageEstimator.NUM_BYTES_INT/*size*/ + RamUsageEstimator.NUM_BYTES_INT/*numDocs*/ + lon.sizeInBytes() + lat.sizeInBytes();
             }
             return size;
         }
@@ -131,15 +131,14 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
         static class GeoPointValues implements org.elasticsearch.index.fielddata.GeoPointValues {
 
-            private final double[] lon;
-            private final double[] lat;
+            private final BigDoubleArrayList lon, lat;
             private final Ordinals.Docs ordinals;
 
             private final GeoPoint scratch = new GeoPoint();
             private final ValuesIter valuesIter;
             private final SafeValuesIter safeValuesIter;
 
-            GeoPointValues(double[] lon, double[] lat, Ordinals.Docs ordinals) {
+            GeoPointValues(BigDoubleArrayList lon, BigDoubleArrayList lat, Ordinals.Docs ordinals) {
                 this.lon = lon;
                 this.lat = lat;
                 this.ordinals = ordinals;
@@ -159,20 +158,20 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
             @Override
             public GeoPoint getValue(int docId) {
-                int ord = ordinals.getOrd(docId);
-                if (ord == 0) {
+                long ord = ordinals.getOrd(docId);
+                if (ord == 0L) {
                     return null;
                 }
-                return scratch.reset(lat[ord], lon[ord]);
+                return scratch.reset(lat.get(ord), lon.get(ord));
             }
 
             @Override
             public GeoPoint getValueSafe(int docId) {
-                int ord = ordinals.getOrd(docId);
-                if (ord == 0) {
+                long ord = ordinals.getOrd(docId);
+                if (ord == 0L) {
                     return null;
                 }
-                return new GeoPoint(lat[ord], lon[ord]);
+                return new GeoPoint(lat.get(ord), lon.get(ord));
             }
 
             @Override
@@ -188,14 +187,13 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
             static class ValuesIter implements Iter {
 
-                private final double[] lon;
-                private final double[] lat;
+                private final BigDoubleArrayList lon, lat;
                 private final GeoPoint scratch = new GeoPoint();
 
                 private Ordinals.Docs.Iter ordsIter;
-                private int ord;
+                private long ord;
 
-                ValuesIter(double[] lon, double[] lat) {
+                ValuesIter(BigDoubleArrayList lon, BigDoubleArrayList lat) {
                     this.lon = lon;
                     this.lat = lat;
                 }
@@ -213,7 +211,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
                 @Override
                 public GeoPoint next() {
-                    scratch.reset(lat[ord], lon[ord]);
+                    scratch.reset(lat.get(ord), lon.get(ord));
                     ord = ordsIter.next();
                     return scratch;
                 }
@@ -221,13 +219,12 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
             static class SafeValuesIter implements Iter {
 
-                private final double[] lon;
-                private final double[] lat;
+                private final BigDoubleArrayList lon, lat;
 
                 private Ordinals.Docs.Iter ordsIter;
-                private int ord;
+                private long ord;
 
-                SafeValuesIter(double[] lon, double[] lat) {
+                SafeValuesIter(BigDoubleArrayList lon, BigDoubleArrayList lat) {
                     this.lon = lon;
                     this.lat = lat;
                 }
@@ -245,7 +242,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
                 @Override
                 public GeoPoint next() {
-                    GeoPoint value = new GeoPoint(lat[ord], lon[ord]);
+                    GeoPoint value = new GeoPoint(lat.get(ord), lon.get(ord));
                     ord = ordsIter.next();
                     return value;
                 }
@@ -258,10 +255,13 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
      */
     public static class SingleFixedSet extends GeoPointDoubleArrayAtomicFieldData {
 
+        private final BigDoubleArrayList lon, lat;
         private final FixedBitSet set;
 
-        public SingleFixedSet(double[] lon, double[] lat, int numDocs, FixedBitSet set) {
-            super(lon, lat, numDocs);
+        public SingleFixedSet(BigDoubleArrayList lon, BigDoubleArrayList lat, int numDocs, FixedBitSet set) {
+            super(numDocs);
+            this.lon = lon;
+            this.lat = lat;
             this.set = set;
         }
 
@@ -278,7 +278,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
         @Override
         public long getMemorySizeInBytes() {
             if (size == -1) {
-                size = RamUsage.NUM_BYTES_INT/*size*/ + RamUsage.NUM_BYTES_INT/*numDocs*/ + (RamUsage.NUM_BYTES_ARRAY_HEADER + (lon.length * RamUsage.NUM_BYTES_DOUBLE)) + (RamUsage.NUM_BYTES_ARRAY_HEADER + (lat.length * RamUsage.NUM_BYTES_DOUBLE)) + (set.getBits().length * RamUsage.NUM_BYTES_LONG);
+                size = RamUsageEstimator.NUM_BYTES_INT/*size*/ + RamUsageEstimator.NUM_BYTES_INT/*numDocs*/ + lon.sizeInBytes() + lat.sizeInBytes() + RamUsageEstimator.sizeOf(set.getBits());
             }
             return size;
         }
@@ -291,14 +291,14 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
         static class GeoPointValues implements org.elasticsearch.index.fielddata.GeoPointValues {
 
-            private final double[] lon;
-            private final double[] lat;
+            private final BigDoubleArrayList lon;
+            private final BigDoubleArrayList lat;
             private final FixedBitSet set;
 
             private final GeoPoint scratch = new GeoPoint();
             private final Iter.Single iter = new Iter.Single();
 
-            GeoPointValues(double[] lon, double[] lat, FixedBitSet set) {
+            GeoPointValues(BigDoubleArrayList lon, BigDoubleArrayList lat, FixedBitSet set) {
                 this.lon = lon;
                 this.lat = lat;
                 this.set = set;
@@ -317,7 +317,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
             @Override
             public GeoPoint getValue(int docId) {
                 if (set.get(docId)) {
-                    return scratch.reset(lat[docId], lon[docId]);
+                    return scratch.reset(lat.get(docId), lon.get(docId));
                 } else {
                     return null;
                 }
@@ -326,7 +326,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
             @Override
             public GeoPoint getValueSafe(int docId) {
                 if (set.get(docId)) {
-                    return new GeoPoint(lat[docId], lon[docId]);
+                    return new GeoPoint(lat.get(docId), lon.get(docId));
                 } else {
                     return null;
                 }
@@ -335,7 +335,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
             @Override
             public Iter getIter(int docId) {
                 if (set.get(docId)) {
-                    return iter.reset(scratch.reset(lat[docId], lon[docId]));
+                    return iter.reset(scratch.reset(lat.get(docId), lon.get(docId)));
                 } else {
                     return Iter.Empty.INSTANCE;
                 }
@@ -344,7 +344,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
             @Override
             public Iter getIterSafe(int docId) {
                 if (set.get(docId)) {
-                    return iter.reset(new GeoPoint(lat[docId], lon[docId]));
+                    return iter.reset(new GeoPoint(lat.get(docId), lon.get(docId)));
                 } else {
                     return Iter.Empty.INSTANCE;
                 }
@@ -357,8 +357,12 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
      */
     public static class Single extends GeoPointDoubleArrayAtomicFieldData {
 
-        public Single(double[] lon, double[] lat, int numDocs) {
-            super(lon, lat, numDocs);
+        private final BigDoubleArrayList lon, lat;
+
+        public Single(BigDoubleArrayList lon, BigDoubleArrayList lat, int numDocs) {
+            super(numDocs);
+            this.lon = lon;
+            this.lat = lat;
         }
 
         @Override
@@ -374,7 +378,7 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
         @Override
         public long getMemorySizeInBytes() {
             if (size == -1) {
-                size = RamUsage.NUM_BYTES_INT/*size*/ + RamUsage.NUM_BYTES_INT/*numDocs*/ + (RamUsage.NUM_BYTES_ARRAY_HEADER + (lon.length * RamUsage.NUM_BYTES_DOUBLE)) + (RamUsage.NUM_BYTES_ARRAY_HEADER + (lat.length * RamUsage.NUM_BYTES_DOUBLE));
+                size = RamUsageEstimator.NUM_BYTES_INT/*size*/ + RamUsageEstimator.NUM_BYTES_INT/*numDocs*/ + (lon.sizeInBytes() + lat.sizeInBytes());
             }
             return size;
         }
@@ -387,13 +391,13 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
         static class GeoPointValues implements org.elasticsearch.index.fielddata.GeoPointValues {
 
-            private final double[] lon;
-            private final double[] lat;
+            private final BigDoubleArrayList lon;
+            private final BigDoubleArrayList lat;
 
             private final GeoPoint scratch = new GeoPoint();
             private final Iter.Single iter = new Iter.Single();
 
-            GeoPointValues(double[] lon, double[] lat) {
+            GeoPointValues(BigDoubleArrayList lon, BigDoubleArrayList lat) {
                 this.lon = lon;
                 this.lat = lat;
             }
@@ -410,22 +414,22 @@ public abstract class GeoPointDoubleArrayAtomicFieldData extends AtomicGeoPointF
 
             @Override
             public GeoPoint getValue(int docId) {
-                return scratch.reset(lat[docId], lon[docId]);
+                return scratch.reset(lat.get(docId), lon.get(docId));
             }
 
             @Override
             public GeoPoint getValueSafe(int docId) {
-                return new GeoPoint(lat[docId], lon[docId]);
+                return new GeoPoint(lat.get(docId), lon.get(docId));
             }
 
             @Override
             public Iter getIter(int docId) {
-                return iter.reset(scratch.reset(lat[docId], lon[docId]));
+                return iter.reset(scratch.reset(lat.get(docId), lon.get(docId)));
             }
 
             @Override
             public Iter getIterSafe(int docId) {
-                return iter.reset(new GeoPoint(lat[docId], lon[docId]));
+                return iter.reset(new GeoPoint(lat.get(docId), lon.get(docId)));
             }
         }
     }

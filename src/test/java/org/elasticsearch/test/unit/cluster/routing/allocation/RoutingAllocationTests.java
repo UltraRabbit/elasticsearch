@@ -19,23 +19,26 @@
 
 package org.elasticsearch.test.unit.cluster.routing.allocation;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.transport.DummyTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
+import org.junit.Ignore;
 
 import java.util.Map;
 
+@Ignore("Not a test")
 public class RoutingAllocationTests {
 
     public static DiscoveryNode newNode(String nodeId) {
-        return new DiscoveryNode(nodeId, DummyTransportAddress.INSTANCE);
+        return new DiscoveryNode(nodeId, DummyTransportAddress.INSTANCE, Version.CURRENT);
     }
 
     public static DiscoveryNode newNode(String nodeId, TransportAddress address) {
-        return new DiscoveryNode(nodeId, address);
+        return new DiscoveryNode(nodeId, address, Version.CURRENT);
     }
 
     public static DiscoveryNode newNode(String nodeId, Map<String, String> attributes) {
-        return new DiscoveryNode("", nodeId, DummyTransportAddress.INSTANCE, attributes);
+        return new DiscoveryNode("", nodeId, DummyTransportAddress.INSTANCE, attributes, Version.CURRENT);
     }
 }

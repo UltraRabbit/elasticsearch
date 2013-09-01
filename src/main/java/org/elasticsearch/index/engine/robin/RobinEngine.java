@@ -1063,7 +1063,9 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             snapshotIndexCommit = deletionPolicy.snapshot();
             traslogSnapshot = translog.snapshot();
         } catch (Exception e) {
-            if (snapshotIndexCommit != null) snapshotIndexCommit.release();
+            if (snapshotIndexCommit != null) {
+                snapshotIndexCommit.release();
+            }
             throw new SnapshotFailedEngineException(shardId, e);
         } finally {
             rwl.readLock().unlock();
@@ -1351,7 +1353,6 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             config.setReaderTermsIndexDivisor(termIndexDivisor);
             config.setMaxThreadStates(indexConcurrency);
             config.setCodec(codecService.codec(codecName));
-
             indexWriter = new IndexWriter(store.directory(), config);
         } catch (IOException e) {
             safeClose(indexWriter);
@@ -1364,13 +1365,12 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
     public static final String INDEX_TERM_INDEX_DIVISOR = "index.term_index_divisor";
     public static final String INDEX_INDEX_CONCURRENCY = "index.index_concurrency";
     public static final String INDEX_GC_DELETES = "index.gc_deletes";
-    public static final String INDEX_CODEC = "index.codec";
     public static final String INDEX_FAIL_ON_MERGE_FAILURE = "index.fail_on_merge_failure";
 
     class ApplySettings implements IndexSettingsService.Listener {
         @Override
         public void onRefreshSettings(Settings settings) {
-            long gcDeletesInMillis = indexSettings.getAsTime(INDEX_GC_DELETES, TimeValue.timeValueMillis(RobinEngine.this.gcDeletesInMillis)).millis();
+            long gcDeletesInMillis = settings.getAsTime(INDEX_GC_DELETES, TimeValue.timeValueMillis(RobinEngine.this.gcDeletesInMillis)).millis();
             if (gcDeletesInMillis != RobinEngine.this.gcDeletesInMillis) {
                 logger.info("updating index.gc_deletes from [{}] to [{}]", TimeValue.timeValueMillis(RobinEngine.this.gcDeletesInMillis), TimeValue.timeValueMillis(gcDeletesInMillis));
                 RobinEngine.this.gcDeletesInMillis = gcDeletesInMillis;

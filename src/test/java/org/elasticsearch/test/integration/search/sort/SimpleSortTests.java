@@ -19,49 +19,30 @@
 
 package org.elasticsearch.test.integration.search.sort;
 
-import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
-import static org.elasticsearch.index.query.QueryBuilders.customScoreQuery;
-import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
-import static org.elasticsearch.index.query.QueryBuilders.termQuery;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertFirstHit;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertSecondHit;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoFailures;
-import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.hasId;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.closeTo;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.nullValue;
-
-import org.elasticsearch.search.sort.ScriptSortBuilder;
-
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
-
 import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.ShardSearchFailure;
-import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.text.Text;
-import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.sort.ScriptSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.test.integration.AbstractSharedClusterTest;
 import org.hamcrest.Matchers;
-import org.testng.annotations.Test;
+import org.junit.Test;
+
+import java.io.IOException;
+import java.util.*;
+
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
+import static org.elasticsearch.index.query.QueryBuilders.*;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.*;
+import static org.hamcrest.Matchers.*;
 
 
 /**
@@ -250,9 +231,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
     }
 
     private void testSimpleSorts(int numberOfShards) throws Exception {
-        final long seed = System.currentTimeMillis();
-        logger.info("testSimpleSorts SEED:[{}]", seed);
-        Random random = new Random(seed);
+        Random random = getRandom();
         prepareCreate("test")
                 .setSettings(randomSettingsBuilder().put("index.number_of_shards", numberOfShards).put("index.number_of_replicas", 0))
                 .addMapping("type1", XContentFactory.jsonBuilder().startObject().startObject("type1").startObject("properties")
@@ -558,7 +537,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .setQuery(matchAllQuery())
                 .addSort(SortBuilders.scriptSort("\u0027\u0027", "string")).setSize(10)
                 .execute().actionGet();
-        assertThat("Failures " + Arrays.toString(searchResponse.getShardFailures()), searchResponse.getShardFailures().length, equalTo(0));
+        assertNoFailures(searchResponse);
     }
     
     @Test
@@ -602,7 +581,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .addSort("ord", SortOrder.ASC).setSize(10)
                 .execute().actionGet();
 
-        assertThat("Failures " + Arrays.toString(searchResponse.getShardFailures()), searchResponse.getShardFailures().length, equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(20l));
         for (int i = 0; i < 10; i++) {
@@ -615,7 +594,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .addSort("ord", SortOrder.ASC).setSize(10)
                 .execute().actionGet();
 
-        assertThat("Failures " + Arrays.toString(searchResponse.getShardFailures()), searchResponse.getShardFailures().length, equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(20l));
         for (int i = 0; i < 10; i++) {
@@ -629,7 +608,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .addSort("ord", SortOrder.ASC).setSize(10)
                 .execute().actionGet();
 
-        assertThat("Failures " + Arrays.toString(searchResponse.getShardFailures()), searchResponse.getShardFailures().length, equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(20l));
         for (int i = 0; i < 10; i++) {
@@ -643,7 +622,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .addSort("ord", SortOrder.ASC).setSize(10)
                 .execute().actionGet();
 
-        assertThat("Failures " + Arrays.toString(searchResponse.getShardFailures()), searchResponse.getShardFailures().length, equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(20l));
         for (int i = 0; i < 10; i++) {
@@ -686,7 +665,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .addSort("svalue", SortOrder.ASC)
                 .execute().actionGet();
 
-        assertThat("Failures " + Arrays.toString(searchResponse.getShardFailures()), searchResponse.getShardFailures().length, equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(3l));
         assertThat((String) searchResponse.getHits().getAt(0).field("id").value(), equalTo("2"));
@@ -699,7 +678,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .addSort("svalue", SortOrder.ASC)
                 .execute().actionGet();
 
-        assertThat("Failures " + Arrays.toString(searchResponse.getShardFailures()), searchResponse.getShardFailures().length, equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(3l));
         assertThat((String) searchResponse.getHits().getAt(0).field("id").value(), equalTo("2"));
@@ -784,7 +763,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .setQuery(matchAllQuery())
                 .addSort(SortBuilders.fieldSort("i_value").order(SortOrder.ASC))
                 .execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(3l));
         assertThat(searchResponse.getHits().getAt(0).id(), equalTo("1"));
@@ -796,7 +775,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .setQuery(matchAllQuery())
                 .addSort(SortBuilders.fieldSort("i_value").order(SortOrder.ASC).missing("_last"))
                 .execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(3l));
         assertThat(searchResponse.getHits().getAt(0).id(), equalTo("1"));
@@ -808,7 +787,7 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                 .setQuery(matchAllQuery())
                 .addSort(SortBuilders.fieldSort("i_value").order(SortOrder.ASC).missing("_first"))
                 .execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
 
         assertThat(searchResponse.getHits().getTotalHits(), equalTo(3l));
         assertThat(searchResponse.getHits().getAt(0).id(), equalTo("2"));
@@ -819,13 +798,14 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
     @Test
     public void testIgnoreUnmapped() throws Exception {
         createIndex("test");
+        ensureYellow();
 
         client().prepareIndex("test", "type1", "1").setSource(jsonBuilder().startObject()
                 .field("id", "1")
                 .field("i_value", -1)
                 .field("d_value", -1.1)
                 .endObject()).execute().actionGet();
-        ensureYellow();
+
         logger.info("--> sort with an unmapped field, verify it fails");
         try {
                 SearchResponse result = client().prepareSearch()
@@ -834,7 +814,10 @@ public class SimpleSortTests extends AbstractSharedClusterTest {
                     .execute().actionGet();
                 assertThat("Expected exception but returned with", result, nullValue());
         } catch (SearchPhaseExecutionException e) {
-
+            //we check that it's a parse failure rather than a different shard failure
+            for (ShardSearchFailure shardSearchFailure : e.shardFailures()) {
+                assertThat(shardSearchFailure.reason(), containsString("Parse Failure [No mapping found for [kkk] in order to sort on]"));
+            }
         }
 
         SearchResponse searchResponse = client().prepareSearch()

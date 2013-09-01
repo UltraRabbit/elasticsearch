@@ -86,6 +86,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent<Indic
     private final NodeMappingCreatedAction nodeMappingCreatedAction;
     private final NodeMappingRefreshAction nodeMappingRefreshAction;
     private final NodeAliasesUpdatedAction nodeAliasesUpdatedAction;
+    private final NodeIndicesStateUpdatedAction nodeIndicesStateUpdatedAction;
 
     // a map of mappings type we have seen per index due to cluster state
     // we need this so we won't remove types automatically created as part of the indexing process
@@ -101,7 +102,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent<Indic
                                       ShardStateAction shardStateAction,
                                       NodeIndexCreatedAction nodeIndexCreatedAction, NodeIndexDeletedAction nodeIndexDeletedAction,
                                       NodeMappingCreatedAction nodeMappingCreatedAction, NodeMappingRefreshAction nodeMappingRefreshAction,
-                                      NodeAliasesUpdatedAction nodeAliasesUpdatedAction) {
+                                      NodeAliasesUpdatedAction nodeAliasesUpdatedAction, NodeIndicesStateUpdatedAction nodeIndicesStateUpdatedAction) {
         super(settings);
         this.indicesService = indicesService;
         this.clusterService = clusterService;
@@ -113,6 +114,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent<Indic
         this.nodeMappingCreatedAction = nodeMappingCreatedAction;
         this.nodeMappingRefreshAction = nodeMappingRefreshAction;
         this.nodeAliasesUpdatedAction = nodeAliasesUpdatedAction;
+        this.nodeIndicesStateUpdatedAction = nodeIndicesStateUpdatedAction;
     }
 
     @Override
@@ -167,6 +169,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent<Indic
             applyCleanedIndices(event);
             applySettings(event);
             sendIndexLifecycleEvents(event);
+            notifyIndicesStateChanged(event);
         }
     }
 
@@ -175,14 +178,25 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent<Indic
             try {
                 nodeIndexCreatedAction.nodeIndexCreated(index, event.state().nodes().localNodeId());
             } catch (Exception e) {
-                logger.debug("failed to send to master index {} created event", index);
+                logger.debug("failed to send to master index {} created event", e, index);
             }
         }
         for (String index : event.indicesDeleted()) {
             try {
                 nodeIndexDeletedAction.nodeIndexDeleted(index, event.state().nodes().localNodeId());
             } catch (Exception e) {
-                logger.debug("failed to send to master index {} deleted event", index);
+                logger.debug("failed to send to master index {} deleted event", e, index);
+            }
+        }
+    }
+
+    private void notifyIndicesStateChanged(final ClusterChangedEvent event) {
+        //handles open/close index notifications
+        if (event.indicesStateChanged()) {
+            try {
+                nodeIndicesStateUpdatedAction.nodeIndexStateUpdated(new NodeIndicesStateUpdatedAction.NodeIndexStateUpdatedResponse(event.state().nodes().localNodeId(), event.state().version()));
+            } catch (Exception e) {
+                logger.debug("failed to send to master indices state change event", e);
             }
         }
     }

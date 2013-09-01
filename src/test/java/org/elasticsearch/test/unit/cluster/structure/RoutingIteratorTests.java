@@ -31,7 +31,7 @@ import org.elasticsearch.cluster.routing.operation.plain.PlainOperationRouting;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.test.unit.cluster.routing.allocation.RoutingAllocationTests;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import static org.elasticsearch.cluster.ClusterState.newClusterStateBuilder;
 import static org.elasticsearch.cluster.metadata.IndexMetaData.newIndexMetaDataBuilder;
@@ -43,7 +43,6 @@ import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilde
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
-@Test
 public class RoutingIteratorTests {
 
     @Test
@@ -283,7 +282,7 @@ public class RoutingIteratorTests {
         clusterState = newClusterStateBuilder().state(clusterState).routingTable(routingTable).build();
 
         // after all are started, check routing iteration
-        ShardIterator shardIterator = clusterState.routingTable().index("test").shard(0).preferAttributesActiveShardsIt(new String[]{"rack_id"}, clusterState.nodes());
+        ShardIterator shardIterator = clusterState.routingTable().index("test").shard(0).preferAttributesActiveInitializingShardsIt(new String[]{"rack_id"}, clusterState.nodes());
         ShardRouting shardRouting = shardIterator.nextOrNull();
         assertThat(shardRouting, notNullValue());
         assertThat(shardRouting.currentNodeId(), equalTo("node1"));
@@ -291,7 +290,7 @@ public class RoutingIteratorTests {
         assertThat(shardRouting, notNullValue());
         assertThat(shardRouting.currentNodeId(), equalTo("node2"));
 
-        shardIterator = clusterState.routingTable().index("test").shard(0).preferAttributesActiveShardsIt(new String[]{"rack_id"}, clusterState.nodes());
+        shardIterator = clusterState.routingTable().index("test").shard(0).preferAttributesActiveInitializingShardsIt(new String[]{"rack_id"}, clusterState.nodes());
         shardRouting = shardIterator.nextOrNull();
         assertThat(shardRouting, notNullValue());
         assertThat(shardRouting.currentNodeId(), equalTo("node1"));

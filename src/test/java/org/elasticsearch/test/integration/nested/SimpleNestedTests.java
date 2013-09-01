@@ -34,23 +34,21 @@ import org.elasticsearch.index.query.FilterBuilders;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.facet.FacetBuilders;
 import org.elasticsearch.search.facet.filter.FilterFacet;
+import org.elasticsearch.search.facet.statistical.StatisticalFacet;
 import org.elasticsearch.search.facet.termsstats.TermsStatsFacet;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.test.integration.AbstractSharedClusterTest;
-import org.testng.annotations.Test;
-
-import java.util.Arrays;
+import org.junit.Assert;
+import org.junit.Test;
 
 import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilder;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.FilterBuilders.*;
 import static org.elasticsearch.index.query.QueryBuilders.*;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertNoFailures;
 import static org.hamcrest.Matchers.*;
-import static org.testng.AssertJUnit.fail;
 
-@Test
 public class SimpleNestedTests extends AbstractSharedClusterTest {
 
     @Test
@@ -63,7 +61,7 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
         assertThat(searchResponse.getHits().totalHits(), equalTo(0l));
         searchResponse = client().prepareSearch("test").setQuery(termQuery("nested1.n_field1", "n_value1_1")).execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), equalTo(0l));
-        
+
         client().prepareIndex("test", "type1", "1").setSource(jsonBuilder().startObject()
                 .field("field1", "value1")
                 .startArray("nested1")
@@ -102,11 +100,11 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
 
         // now, do a nested query
         searchResponse = run(client().prepareSearch("test").setQuery(nestedQuery("nested1", termQuery("nested1.n_field1", "n_value1_1"))));
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         searchResponse = run(client().prepareSearch("test").setQuery(nestedQuery("nested1", termQuery("nested1.n_field1", "n_value1_1"))).setSearchType(SearchType.DFS_QUERY_THEN_FETCH));
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         // add another doc, one that would match if it was not nested...
@@ -132,19 +130,19 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 boolQuery().must(termQuery("nested1.n_field1", "n_value1_1")).must(termQuery("nested1.n_field2", "n_value2_1")))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         // filter
         searchResponse = client().prepareSearch("test").setQuery(filteredQuery(matchAllQuery(), nestedFilter("nested1",
                 boolQuery().must(termQuery("nested1.n_field1", "n_value1_1")).must(termQuery("nested1.n_field2", "n_value2_1"))))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         // check with type prefix
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("type1.nested1",
                 boolQuery().must(termQuery("nested1.n_field1", "n_value1_1")).must(termQuery("nested1.n_field2", "n_value2_1")))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         // check delete, so all is gone...
@@ -157,7 +155,7 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
         assertThat(statusResponse.getIndex("test").getDocs().getNumDocs(), equalTo(3l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1", termQuery("nested1.n_field1", "n_value1_1"))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
     }
 
@@ -304,42 +302,42 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
         // do some multi nested queries
         SearchResponse searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 termQuery("nested1.field1", "1"))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1.nested2",
                 termQuery("nested1.nested2.field2", "2"))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 boolQuery().must(termQuery("nested1.field1", "1")).must(nestedQuery("nested1.nested2", termQuery("nested1.nested2.field2", "2"))))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 boolQuery().must(termQuery("nested1.field1", "1")).must(nestedQuery("nested1.nested2", termQuery("nested1.nested2.field2", "3"))))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 boolQuery().must(termQuery("nested1.field1", "1")).must(nestedQuery("nested1.nested2", termQuery("nested1.nested2.field2", "4"))))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(0l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 boolQuery().must(termQuery("nested1.field1", "1")).must(nestedQuery("nested1.nested2", termQuery("nested1.nested2.field2", "5"))))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(0l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 boolQuery().must(termQuery("nested1.field1", "4")).must(nestedQuery("nested1.nested2", termQuery("nested1.nested2.field2", "5"))))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
 
         searchResponse = client().prepareSearch("test").setQuery(nestedQuery("nested1",
                 boolQuery().must(termQuery("nested1.field1", "4")).must(nestedQuery("nested1.nested2", termQuery("nested1.nested2.field2", "2"))))).execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(0l));
     }
 
@@ -390,9 +388,12 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
 
         SearchResponse searchResponse = client().prepareSearch("test").setQuery(matchAllQuery())
                 .addFacet(FacetBuilders.termsStatsFacet("facet1").keyField("nested1.nested2.field2_1").valueField("nested1.nested2.field2_2").nested("nested1.nested2"))
-                .execute().actionGet();
+                .addFacet(FacetBuilders.statisticalFacet("facet2").field("field2_2").nested("nested1.nested2"))
+                .addFacet(FacetBuilders.statisticalFacet("facet2_blue").field("field2_2").nested("nested1.nested2")
+                .facetFilter(boolFilter().must(termFilter("field2_1", "blue"))))
+        .execute().actionGet();
 
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(2l));
 
         TermsStatsFacet termsStatsFacet = searchResponse.getFacets().facet("facet1");
@@ -409,6 +410,18 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
         assertThat(termsStatsFacet.getEntries().get(3).getTerm().string(), equalTo("red"));
         assertThat(termsStatsFacet.getEntries().get(3).getCount(), equalTo(1l));
         assertThat(termsStatsFacet.getEntries().get(3).getTotal(), equalTo(12d));
+
+        StatisticalFacet statsFacet = searchResponse.getFacets().facet("facet2");
+        assertThat(statsFacet.getCount(), equalTo(8l));
+        assertThat(statsFacet.getMin(), equalTo(1d));
+        assertThat(statsFacet.getMax(), equalTo(12d));
+        assertThat(statsFacet.getTotal(), equalTo(47d));
+
+        StatisticalFacet blueFacet = searchResponse.getFacets().facet("facet2_blue");
+        assertThat(blueFacet.getCount(), equalTo(3l));
+        assertThat(blueFacet.getMin(), equalTo(1d));
+        assertThat(blueFacet.getMax(), equalTo(5d));
+        assertThat(blueFacet.getTotal(), equalTo(8d));
 
         // test scope ones (collector based)
         searchResponse = client().prepareSearch("test")
@@ -427,7 +440,7 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
                 )
                 .execute().actionGet();
 
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(2l));
 
         termsStatsFacet = searchResponse.getFacets().facet("facet1");
@@ -450,7 +463,7 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
                 )
                 .execute().actionGet();
 
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(2l));
 
         FilterFacet filterFacet = searchResponse.getFacets().facet("facet1");
@@ -554,7 +567,7 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
                 .setQuery(nestedQuery("nested1", termQuery("nested1.n_field1", "n_value1")).scoreMode("total"))
                 .setExplain(true)
                 .execute().actionGet();
-        assertThat(Arrays.toString(searchResponse.getShardFailures()), searchResponse.getFailedShards(), equalTo(0));
+        assertNoFailures(searchResponse);
         assertThat(searchResponse.getHits().totalHits(), equalTo(1l));
         Explanation explanation = searchResponse.getHits().hits()[0].explanation();
         assertThat(explanation.getValue(), equalTo(2f));
@@ -581,10 +594,10 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
                         .startObject("nested1")
                         .field("type", "nested")
                         .startObject("properties")
-                            .startObject("field1")
-                                .field("type", "long")
-                                .field("store", "yes")
-                            .endObject()
+                        .startObject("field1")
+                        .field("type", "long")
+                        .field("store", "yes")
+                        .endObject()
                         .endObject()
                         .endObject()
                         .endObject().endObject().endObject())
@@ -736,7 +749,7 @@ public class SimpleNestedTests extends AbstractSharedClusterTest {
                     .addSort(SortBuilders.scriptSort("_fields['nested1.field1'].value", "string")
                             .setNestedPath("nested1").sortMode("sum").order(SortOrder.ASC))
                     .execute().actionGet();
-            fail("SearchPhaseExecutionException should have been thrown");
+            Assert.fail("SearchPhaseExecutionException should have been thrown");
         } catch (SearchPhaseExecutionException e) {
             assertThat(e.getMessage(), containsString("type [string] doesn't support mode [SUM]"));
         }

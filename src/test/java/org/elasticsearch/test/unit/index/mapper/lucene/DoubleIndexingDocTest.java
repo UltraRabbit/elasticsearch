@@ -1,5 +1,6 @@
 package org.elasticsearch.test.unit.index.mapper.lucene;
 
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -10,8 +11,8 @@ import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.mapper.DocumentMapper;
 import org.elasticsearch.index.mapper.ParsedDocument;
-import org.elasticsearch.test.unit.index.mapper.MapperTests;
-import org.testng.annotations.Test;
+import org.elasticsearch.test.unit.index.mapper.MapperTestUtils;
+import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -19,7 +20,6 @@ import static org.hamcrest.Matchers.equalTo;
 /**
  *
  */
-@Test
 public class DoubleIndexingDocTest {
 
     @Test
@@ -29,7 +29,7 @@ public class DoubleIndexingDocTest {
         String mapping = XContentFactory.jsonBuilder().startObject().startObject("type")
                 .startObject("properties").endObject()
                 .endObject().endObject().string();
-        DocumentMapper mapper = MapperTests.newParser().parse(mapping);
+        DocumentMapper mapper = MapperTestUtils.newParser().parse(mapping);
 
         ParsedDocument doc = mapper.parse("type", "1", XContentFactory.jsonBuilder()
                 .startObject()
@@ -44,7 +44,7 @@ public class DoubleIndexingDocTest {
         writer.addDocument(doc.rootDoc(), doc.analyzer());
         writer.addDocument(doc.rootDoc(), doc.analyzer());
 
-        IndexReader reader = IndexReader.open(writer, true);
+        IndexReader reader = DirectoryReader.open(writer, true);
         IndexSearcher searcher = new IndexSearcher(reader);
 
         TopDocs topDocs = searcher.search(mapper.mappers().smartName("field1").mapper().termQuery("value1", null), 10);

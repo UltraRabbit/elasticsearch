@@ -22,20 +22,16 @@ package org.elasticsearch.test.unit.common.lucene.search;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.store.RAMDirectory;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.lucene.search.MultiPhrasePrefixQuery;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
-@Test
 public class MultiPhrasePrefixQueryTests {
 
     @Test
@@ -44,7 +40,7 @@ public class MultiPhrasePrefixQueryTests {
         Document doc = new Document();
         doc.add(new Field("field", "aaa bbb ccc ddd", TextField.TYPE_NOT_STORED));
         writer.addDocument(doc);
-        IndexReader reader = IndexReader.open(writer, true);
+        IndexReader reader = DirectoryReader.open(writer, true);
         IndexSearcher searcher = new IndexSearcher(reader);
 
         MultiPhrasePrefixQuery query = new MultiPhrasePrefixQuery();

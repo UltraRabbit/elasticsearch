@@ -19,9 +19,9 @@
 
 package org.elasticsearch.index.fielddata.plain;
 
+import org.apache.lucene.util.RamUsageEstimator;
 import org.apache.lucene.util.packed.MonotonicAppendingLongBuffer;
 import org.apache.lucene.util.packed.PackedInts;
-import org.elasticsearch.common.RamUsage;
 import org.elasticsearch.index.fielddata.*;
 import org.elasticsearch.index.fielddata.ordinals.Ordinals;
 
@@ -116,7 +116,7 @@ public abstract class PackedArrayAtomicFieldData extends AtomicNumericFieldData 
         @Override
         public long getMemorySizeInBytes() {
             if (size == -1) {
-                size = RamUsage.NUM_BYTES_INT/*size*/ + RamUsage.NUM_BYTES_INT/*numDocs*/ + values.ramBytesUsed() + ordinals.getMemorySizeInBytes();
+                size = RamUsageEstimator.NUM_BYTES_INT/*size*/ + RamUsageEstimator.NUM_BYTES_INT/*numDocs*/ + values.ramBytesUsed() + ordinals.getMemorySizeInBytes();
             }
             return size;
         }
@@ -141,7 +141,7 @@ public abstract class PackedArrayAtomicFieldData extends AtomicNumericFieldData 
             }
 
             @Override
-            public long getValueByOrd(int ord) {
+            public long getValueByOrd(long ord) {
                 return ord == 0 ? 0L : values.get(ord - 1);
             }
         }
@@ -156,7 +156,7 @@ public abstract class PackedArrayAtomicFieldData extends AtomicNumericFieldData 
             }
 
             @Override
-            public double getValueByOrd(int ord) {
+            public double getValueByOrd(long ord) {
                 return ord == 0 ? 0L : values.get(ord - 1);
             }
 
@@ -194,7 +194,7 @@ public abstract class PackedArrayAtomicFieldData extends AtomicNumericFieldData 
         @Override
         public long getMemorySizeInBytes() {
             if (size == -1) {
-                size = values.ramBytesUsed() + 2 * RamUsage.NUM_BYTES_LONG;
+                size = values.ramBytesUsed() + 2 * RamUsageEstimator.NUM_BYTES_LONG;
             }
             return size;
         }

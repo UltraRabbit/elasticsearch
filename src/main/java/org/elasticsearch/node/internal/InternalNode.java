@@ -19,6 +19,7 @@
 
 package org.elasticsearch.node.internal;
 
+import org.elasticsearch.Build;
 import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionModule;
@@ -116,8 +117,12 @@ public final class InternalNode implements Node {
     public InternalNode(Settings pSettings, boolean loadConfigSettings) throws ElasticSearchException {
         Tuple<Settings, Environment> tuple = InternalSettingsPerparer.prepareSettings(pSettings, loadConfigSettings);
 
+        Version version = Version.CURRENT;
+
         ESLogger logger = Loggers.getLogger(Node.class, tuple.v1().get("name"));
-        logger.info("{{}}[{}]: initializing ...", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("version[{}], pid[{}], build[{}/{}]", version, JvmInfo.jvmInfo().pid(), Build.CURRENT.hashShort(), Build.CURRENT.timestamp());
+
+        logger.info("initializing ...");
 
         if (logger.isDebugEnabled()) {
             Environment env = tuple.v2();
@@ -135,6 +140,7 @@ public final class InternalNode implements Node {
         NodeEnvironment nodeEnvironment = new NodeEnvironment(this.settings, this.environment);
 
         ModulesBuilder modules = new ModulesBuilder();
+        modules.add(new Version.Module(version));
         modules.add(new CacheRecyclerModule(settings));
         modules.add(new PluginsModule(settings, pluginsService));
         modules.add(new SettingsModule(settings));
@@ -167,7 +173,7 @@ public final class InternalNode implements Node {
 
         client = injector.getInstance(Client.class);
 
-        logger.info("{{}}[{}]: initialized", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("initialized");
     }
 
     @Override
@@ -186,7 +192,7 @@ public final class InternalNode implements Node {
         }
 
         ESLogger logger = Loggers.getLogger(Node.class, settings.get("name"));
-        logger.info("{{}}[{}]: starting ...", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("starting ...");
 
         // hack around dependency injection problem (for now...)
         injector.getInstance(Discovery.class).setAllocationService(injector.getInstance(AllocationService.class));
@@ -216,7 +222,7 @@ public final class InternalNode implements Node {
         }
         injector.getInstance(BulkUdpService.class).start();
 
-        logger.info("{{}}[{}]: started", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("started");
 
         return this;
     }
@@ -227,7 +233,7 @@ public final class InternalNode implements Node {
             return this;
         }
         ESLogger logger = Loggers.getLogger(Node.class, settings.get("name"));
-        logger.info("{{}}[{}]: stopping ...", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("stopping ...");
 
         injector.getInstance(BulkUdpService.class).stop();
         if (settings.getAsBoolean("http.enabled", true)) {
@@ -261,7 +267,7 @@ public final class InternalNode implements Node {
             injector.getInstance(plugin).stop();
         }
 
-        logger.info("{{}}[{}]: stopped", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("stopped");
 
         return this;
     }
@@ -275,7 +281,7 @@ public final class InternalNode implements Node {
         }
 
         ESLogger logger = Loggers.getLogger(Node.class, settings.get("name"));
-        logger.info("{{}}[{}]: closing ...", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("closing ...");
 
         StopWatch stopWatch = new StopWatch("node_close");
         stopWatch.start("bulk.udp");
@@ -352,7 +358,7 @@ public final class InternalNode implements Node {
         CachedStreams.clear();
         ThreadLocals.clearReferencesThreadLocals();
 
-        logger.info("{{}}[{}]: closed", Version.CURRENT, JvmInfo.jvmInfo().pid());
+        logger.info("closed");
     }
 
     @Override

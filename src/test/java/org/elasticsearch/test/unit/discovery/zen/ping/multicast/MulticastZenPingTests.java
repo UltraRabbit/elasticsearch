@@ -19,10 +19,13 @@
 
 package org.elasticsearch.test.unit.discovery.zen.ping.multicast;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.common.logging.Loggers;
+import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
@@ -30,35 +33,44 @@ import org.elasticsearch.discovery.zen.DiscoveryNodesProvider;
 import org.elasticsearch.discovery.zen.ping.ZenPing;
 import org.elasticsearch.discovery.zen.ping.multicast.MulticastZenPing;
 import org.elasticsearch.node.service.NodeService;
+import org.elasticsearch.test.integration.ElasticsearchTestCase;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 import org.elasticsearch.transport.local.LocalTransport;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
  *
  */
-@Test
-public class MulticastZenPingTests {
+public class MulticastZenPingTests extends ElasticsearchTestCase {
+
+    private Settings buildRandomMulticast(Settings settings) {
+        ImmutableSettings.Builder builder = ImmutableSettings.builder().put(settings);
+        builder.put("discovery.zen.ping.multicast.group", "224.2.3." + randomIntBetween(0, 255));
+        builder.put("discovery.zen.ping.multicast.port", randomIntBetween(55000, 56000));
+        return builder.build();
+    }
 
     @Test
     public void testSimplePings() {
+        Settings settings = ImmutableSettings.EMPTY;
+        settings = buildRandomMulticast(settings);
+
         ThreadPool threadPool = new ThreadPool();
         ClusterName clusterName = new ClusterName("test");
-        final TransportService transportServiceA = new TransportService(new LocalTransport(threadPool), threadPool).start();
-        final DiscoveryNode nodeA = new DiscoveryNode("A", transportServiceA.boundAddress().publishAddress());
+        final TransportService transportServiceA = new TransportService(new LocalTransport(settings, threadPool, Version.CURRENT), threadPool).start();
+        final DiscoveryNode nodeA = new DiscoveryNode("A", transportServiceA.boundAddress().publishAddress(), Version.CURRENT);
 
-        final TransportService transportServiceB = new TransportService(new LocalTransport(threadPool), threadPool).start();
-        final DiscoveryNode nodeB = new DiscoveryNode("B", transportServiceA.boundAddress().publishAddress());
+        final TransportService transportServiceB = new TransportService(new LocalTransport(settings, threadPool, Version.CURRENT), threadPool).start();
+        final DiscoveryNode nodeB = new DiscoveryNode("B", transportServiceA.boundAddress().publishAddress(), Version.CURRENT);
 
-        MulticastZenPing zenPingA = new MulticastZenPing(threadPool, transportServiceA, clusterName);
+        MulticastZenPing zenPingA = new MulticastZenPing(threadPool, transportServiceA, clusterName, Version.CURRENT);
         zenPingA.setNodesProvider(new DiscoveryNodesProvider() {
             @Override
             public DiscoveryNodes nodes() {
@@ -72,7 +84,7 @@ public class MulticastZenPingTests {
         });
         zenPingA.start();
 
-        MulticastZenPing zenPingB = new MulticastZenPing(threadPool, transportServiceB, clusterName);
+        MulticastZenPing zenPingB = new MulticastZenPing(threadPool, transportServiceB, clusterName, Version.CURRENT);
         zenPingB.setNodesProvider(new DiscoveryNodesProvider() {
             @Override
             public DiscoveryNodes nodes() {
@@ -101,13 +113,15 @@ public class MulticastZenPingTests {
 
     @Test
     public void testExternalPing() throws Exception {
+        Settings settings = ImmutableSettings.EMPTY;
+        settings = buildRandomMulticast(settings);
+
         ThreadPool threadPool = new ThreadPool();
-
         ClusterName clusterName = new ClusterName("test");
-        final TransportService transportServiceA = new TransportService(new LocalTransport(threadPool), threadPool).start();
-        final DiscoveryNode nodeA = new DiscoveryNode("A", transportServiceA.boundAddress().publishAddress());
+        final TransportService transportServiceA = new TransportService(new LocalTransport(settings, threadPool, Version.CURRENT), threadPool).start();
+        final DiscoveryNode nodeA = new DiscoveryNode("A", transportServiceA.boundAddress().publishAddress(), Version.CURRENT);
 
-        MulticastZenPing zenPingA = new MulticastZenPing(threadPool, transportServiceA, clusterName);
+        MulticastZenPing zenPingA = new MulticastZenPing(threadPool, transportServiceA, clusterName, Version.CURRENT);
         zenPingA.setNodesProvider(new DiscoveryNodesProvider() {
             @Override
             public DiscoveryNodes nodes() {

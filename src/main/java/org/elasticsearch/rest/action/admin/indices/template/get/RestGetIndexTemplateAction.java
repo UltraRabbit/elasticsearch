@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import static org.elasticsearch.rest.RestRequest.Method.GET;
+import static org.elasticsearch.rest.RestStatus.NOT_FOUND;
 import static org.elasticsearch.rest.RestStatus.OK;
 
 /**
@@ -76,16 +77,21 @@ public class RestGetIndexTemplateAction extends BaseRestHandler {
 
                 try {
                     MetaData metaData = response.getState().metaData();
-                    XContentBuilder builder = RestXContentBuilder.restContentBuilder(request);
-                    builder.startObject();
 
-                    for (IndexTemplateMetaData indexMetaData : metaData.templates().values()) {
-                        IndexTemplateMetaData.Builder.toXContent(indexMetaData, builder, params);
+                    if (metaData.templates().values().size() == 0) {
+                        channel.sendResponse(new StringRestResponse(NOT_FOUND));
+                    } else {
+                        XContentBuilder builder = RestXContentBuilder.restContentBuilder(request);
+                        builder.startObject();
+
+                        for (IndexTemplateMetaData indexMetaData : metaData.templates().values()) {
+                            IndexTemplateMetaData.Builder.toXContent(indexMetaData, builder, params);
+                        }
+
+                        builder.endObject();
+
+                        channel.sendResponse(new XContentRestResponse(request, OK, builder));
                     }
-
-                    builder.endObject();
-
-                    channel.sendResponse(new XContentRestResponse(request, OK, builder));
                 } catch (Throwable e) {
                     onFailure(e);
                 }

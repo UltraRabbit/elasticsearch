@@ -23,13 +23,14 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.io.Closeables;
 import org.apache.lucene.util.CollectionUtil;
+import org.apache.lucene.util.IOUtils;
 import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.Version;
+import org.elasticsearch.action.support.master.MasterNodeOperationRequest;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
-import org.elasticsearch.cluster.ProcessedClusterStateUpdateTask;
+import org.elasticsearch.cluster.TimeoutClusterStateUpdateTask;
 import org.elasticsearch.cluster.action.index.NodeIndexCreatedAction;
 import org.elasticsearch.cluster.block.ClusterBlock;
 import org.elasticsearch.cluster.block.ClusterBlocks;
@@ -68,6 +69,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -83,24 +86,18 @@ import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilde
 public class MetaDataCreateIndexService extends AbstractComponent {
 
     private final Environment environment;
-
     private final ThreadPool threadPool;
-
     private final ClusterService clusterService;
-
     private final IndicesService indicesService;
-
     private final AllocationService allocationService;
-
     private final NodeIndexCreatedAction nodeIndexCreatedAction;
-
     private final MetaDataService metaDataService;
-
+    private final Version version;
     private final String riverIndexName;
 
     @Inject
     public MetaDataCreateIndexService(Settings settings, Environment environment, ThreadPool threadPool, ClusterService clusterService, IndicesService indicesService,
-                                      AllocationService allocationService, NodeIndexCreatedAction nodeIndexCreatedAction, MetaDataService metaDataService, @RiverIndexName String riverIndexName) {
+                                      AllocationService allocationService, NodeIndexCreatedAction nodeIndexCreatedAction, MetaDataService metaDataService, Version version, @RiverIndexName String riverIndexName) {
         super(settings);
         this.environment = environment;
         this.threadPool = threadPool;
@@ -109,6 +106,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
         this.allocationService = allocationService;
         this.nodeIndexCreatedAction = nodeIndexCreatedAction;
         this.metaDataService = metaDataService;
+        this.version = version;
         this.riverIndexName = riverIndexName;
     }
 
@@ -125,28 +123,52 @@ public class MetaDataCreateIndexService extends AbstractComponent {
 
         // we lock here, and not within the cluster service callback since we don't want to
         // block the whole cluster state handling
-        MetaDataService.MdLock mdLock = metaDataService.indexMetaDataLock(request.index);
-        try {
-            mdLock.lock();
-        } catch (InterruptedException e) {
-            userListener.onFailure(e);
+        final Semaphore mdLock = metaDataService.indexMetaDataLock(request.index);
+
+        // quick check to see if we can acquire a lock, otherwise spawn to a thread pool
+        if (mdLock.tryAcquire()) {
+            createIndex(request, userListener, mdLock);
             return;
         }
 
-        final CreateIndexListener listener = new CreateIndexListener(mdLock, request, userListener);
-
-        clusterService.submitStateUpdateTask("create-index [" + request.index + "], cause [" + request.cause + "]", Priority.URGENT, new ProcessedClusterStateUpdateTask() {
+        threadPool.executor(ThreadPool.Names.MANAGEMENT).execute(new Runnable() {
             @Override
-            public ClusterState execute(ClusterState currentState) {
+            public void run() {
+                try {
+                    if (!mdLock.tryAcquire(request.masterTimeout.nanos(), TimeUnit.NANOSECONDS)) {
+                        userListener.onFailure(new ProcessClusterEventTimeoutException(request.masterTimeout, "acquire index lock"));
+                        return;
+                    }
+                } catch (InterruptedException e) {
+                    userListener.onFailure(e);
+                    return;
+                }
+
+                createIndex(request, userListener, mdLock);
+            }
+        });
+    }
+
+    private void createIndex(final Request request, final Listener userListener, Semaphore mdLock) {
+        final CreateIndexListener listener = new CreateIndexListener(mdLock, request, userListener);
+        clusterService.submitStateUpdateTask("create-index [" + request.index + "], cause [" + request.cause + "]", Priority.URGENT, new TimeoutClusterStateUpdateTask() {
+
+            @Override
+            public TimeValue timeout() {
+                return request.masterTimeout;
+            }
+
+            @Override
+            public void onFailure(String source, Throwable t) {
+                listener.onFailure(t);
+            }
+
+            @Override
+            public ClusterState execute(ClusterState currentState) throws Exception {
                 boolean indexCreated = false;
                 String failureReason = null;
                 try {
-                    try {
-                        validate(request, currentState);
-                    } catch (Throwable e) {
-                        listener.onFailure(e);
-                        return currentState;
-                    }
+                    validate(request, currentState);
 
                     // we only find a template when its an API call (a new index)
                     // find templates, highest order are better matching
@@ -256,7 +278,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                         indexSettingsBuilder.put(SETTING_AUTO_EXPAND_REPLICAS, settings.get(SETTING_AUTO_EXPAND_REPLICAS));
                     }
 
-                    indexSettingsBuilder.put(SETTING_VERSION_CREATED, Version.CURRENT);
+                    indexSettingsBuilder.put(SETTING_VERSION_CREATED, version);
 
                     Settings actualIndexSettings = indexSettingsBuilder.build();
 
@@ -326,7 +348,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                         }
                     }
                     if (request.state == State.CLOSE) {
-                        blocks.addIndexBlock(request.index, MetaDataStateIndexService.INDEX_CLOSED_BLOCK);
+                        blocks.addIndexBlock(request.index, MetaDataIndexStateService.INDEX_CLOSED_BLOCK);
                     }
 
                     ClusterState updatedState = newClusterStateBuilder().state(currentState).blocks(blocks).metaData(newMetaData).build();
@@ -364,19 +386,16 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                     });
 
                     return updatedState;
-                } catch (Throwable e) {
-                    logger.warn("[{}] failed to create", e, request.index);
+                } finally {
                     if (indexCreated) {
                         // Index was already partially created - need to clean up
                         indicesService.removeIndex(request.index, failureReason != null ? failureReason : "failed to create index");
                     }
-                    listener.onFailure(e);
-                    return currentState;
                 }
             }
 
             @Override
-            public void clusterStateProcessed(ClusterState clusterState) {
+            public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
             }
         });
     }
@@ -384,16 +403,12 @@ public class MetaDataCreateIndexService extends AbstractComponent {
     class CreateIndexListener implements Listener {
 
         private final AtomicBoolean notified = new AtomicBoolean();
-
-        private final MetaDataService.MdLock mdLock;
-
+        private final Semaphore mdLock;
         private final Request request;
-
         private final Listener listener;
-
         volatile ScheduledFuture future;
 
-        private CreateIndexListener(MetaDataService.MdLock mdLock, Request request, Listener listener) {
+        private CreateIndexListener(Semaphore mdLock, Request request, Listener listener) {
             this.mdLock = mdLock;
             this.request = request;
             this.listener = listener;
@@ -402,7 +417,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
         @Override
         public void onResponse(final Response response) {
             if (notified.compareAndSet(false, true)) {
-                mdLock.unlock();
+                mdLock.release();
                 if (future != null) {
                     future.cancel(false);
                 }
@@ -413,7 +428,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
         @Override
         public void onFailure(Throwable t) {
             if (notified.compareAndSet(false, true)) {
-                mdLock.unlock();
+                mdLock.release();
                 if (future != null) {
                     future.cancel(false);
                 }
@@ -473,13 +488,13 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                     } catch (Exception e) {
                         logger.warn("[{}] failed to read template [{}] from config", e, request.index, templatesFile.getAbsolutePath());
                     } finally {
-                        Closeables.closeQuietly(parser);
+                        IOUtils.closeWhileHandlingException(parser);
                     }
                 }
             }
         }
 
-        CollectionUtil.quickSort(templates, new Comparator<IndexTemplateMetaData>() {
+        CollectionUtil.timSort(templates, new Comparator<IndexTemplateMetaData>() {
             @Override
             public int compare(IndexTemplateMetaData o1, IndexTemplateMetaData o2) {
                 return o2.order() - o1.order();
@@ -528,7 +543,6 @@ public class MetaDataCreateIndexService extends AbstractComponent {
     public static class Request {
 
         final String cause;
-
         final String index;
 
         State state = State.OPEN;
@@ -541,6 +555,7 @@ public class MetaDataCreateIndexService extends AbstractComponent {
 
 
         TimeValue timeout = TimeValue.timeValueSeconds(5);
+        TimeValue masterTimeout = MasterNodeOperationRequest.DEFAULT_MASTER_NODE_TIMEOUT;
 
         Set<ClusterBlock> blocks = Sets.newHashSet();
 
@@ -590,6 +605,11 @@ public class MetaDataCreateIndexService extends AbstractComponent {
 
         public Request timeout(TimeValue timeout) {
             this.timeout = timeout;
+            return this;
+        }
+
+        public Request masterTimeout(TimeValue masterTimeout) {
+            this.masterTimeout = masterTimeout;
             return this;
         }
     }

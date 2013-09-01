@@ -25,7 +25,6 @@ import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.store.RAMDirectory;
-import org.apache.lucene.util.Version;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.index.Index;
 import org.elasticsearch.index.deletionpolicy.KeepOnlyLastDeletionPolicy;
@@ -33,9 +32,9 @@ import org.elasticsearch.index.deletionpolicy.SnapshotDeletionPolicy;
 import org.elasticsearch.index.deletionpolicy.SnapshotIndexCommit;
 import org.elasticsearch.index.deletionpolicy.SnapshotIndexCommits;
 import org.elasticsearch.index.shard.ShardId;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import static org.apache.lucene.index.DirectoryReader.listCommits;
 import static org.elasticsearch.common.settings.ImmutableSettings.Builder.EMPTY_SETTINGS;
@@ -44,8 +43,6 @@ import static org.hamcrest.Matchers.equalTo;
 
 /**
  * A set of tests for {@link org.elasticsearch.index.deletionpolicy.SnapshotDeletionPolicy}.
- *
- *
  */
 public class SnapshotDeletionPolicyTests {
 
@@ -55,22 +52,22 @@ public class SnapshotDeletionPolicyTests {
     private SnapshotDeletionPolicy deletionPolicy;
     private IndexWriter indexWriter;
 
-    @BeforeClass
+    @Before
     public void setUp() throws Exception {
         dir = new RAMDirectory();
         deletionPolicy = new SnapshotDeletionPolicy(new KeepOnlyLastDeletionPolicy(shardId, EMPTY_SETTINGS));
         // LUCENE 4 UPGRADE: Not sure about version.
-        indexWriter = new IndexWriter(dir, new IndexWriterConfig(Version.LUCENE_31, Lucene.STANDARD_ANALYZER)
+        indexWriter = new IndexWriter(dir, new IndexWriterConfig(Lucene.VERSION, Lucene.STANDARD_ANALYZER)
                 .setIndexDeletionPolicy(deletionPolicy)
                 .setOpenMode(IndexWriterConfig.OpenMode.CREATE));
     }
 
-    @AfterClass
+    @After
     public void tearDown() throws Exception {
         indexWriter.close();
         dir.close();
     }
-    
+
     private Document testDocument() {
         Document document = new Document();
         document.add(new TextField("test", "1", Field.Store.YES));

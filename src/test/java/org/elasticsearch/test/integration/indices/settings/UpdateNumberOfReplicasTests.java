@@ -24,20 +24,20 @@ import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.action.count.CountResponse;
 import org.elasticsearch.common.Priority;
 import org.elasticsearch.test.integration.AbstractSharedClusterTest;
-import org.hamcrest.Matchers;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilder;
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertHitCount;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
  *
  */
 public class UpdateNumberOfReplicasTests extends AbstractSharedClusterTest {
-    
+
+
     @Test
     public void simpleUpdateNumberOfReplicasTests() throws Exception {
         logger.info("Creating index test");
@@ -54,14 +54,14 @@ public class UpdateNumberOfReplicasTests extends AbstractSharedClusterTest {
         for (int i = 0; i < 10; i++) {
             client().prepareIndex("test", "type1", Integer.toString(i)).setSource(jsonBuilder().startObject()
                     .field("value", "test" + i)
-                    .endObject()).execute().actionGet();
+                    .endObject()).get();
         }
 
         client().admin().indices().prepareRefresh().execute().actionGet();
 
         for (int i = 0; i < 10; i++) {
-            CountResponse countResponse = client().prepareCount().setQuery(matchAllQuery()).execute().actionGet();
-            assertThat(countResponse.getCount(), equalTo(10l));
+            CountResponse countResponse = client().prepareCount().setQuery(matchAllQuery()).get();
+            assertHitCount(countResponse, 10l);
         }
 
         logger.info("Increasing the number of replicas from 1 to 2");
@@ -91,12 +91,12 @@ public class UpdateNumberOfReplicasTests extends AbstractSharedClusterTest {
         assertThat(clusterHealth.getIndices().get("test").getActiveShards(), equalTo(15));
 
         for (int i = 0; i < 10; i++) {
-            CountResponse countResponse = client().prepareCount().setQuery(matchAllQuery()).execute().actionGet();
-            assertThat(countResponse.getCount(), equalTo(10l));
+            CountResponse countResponse = client().prepareCount().setQuery(matchAllQuery()).get();
+            assertHitCount(countResponse, 10l);
         }
 
         logger.info("Decreasing number of replicas from 2 to 0");
-        client().admin().indices().prepareUpdateSettings("test").setSettings(settingsBuilder().put("index.number_of_replicas", 0)).execute().actionGet();
+        client().admin().indices().prepareUpdateSettings("test").setSettings(settingsBuilder().put("index.number_of_replicas", 0)).get();
         Thread.sleep(200);
 
         logger.info("Running Cluster Health");
@@ -109,9 +109,7 @@ public class UpdateNumberOfReplicasTests extends AbstractSharedClusterTest {
         assertThat(clusterHealth.getIndices().get("test").getActiveShards(), equalTo(5));
 
         for (int i = 0; i < 10; i++) {
-            CountResponse countResponse = client().prepareCount().setQuery(matchAllQuery()).execute().actionGet();
-            assertThat(countResponse.getShardFailures().toString(), countResponse.getFailedShards(), equalTo(0));
-            assertThat(countResponse.getCount(), equalTo(10l));
+            assertHitCount(client().prepareSearch().setQuery(matchAllQuery()).get(), 10);
         }
     }
 
@@ -199,7 +197,7 @@ public class UpdateNumberOfReplicasTests extends AbstractSharedClusterTest {
         logger.info("--> closing one node");
         cluster().ensureAtMostNumNodes(2);
         allowNodes("test", 2);
-        
+
         logger.info("--> running cluster health");
         clusterHealth = client().admin().cluster().prepareHealth().setWaitForEvents(Priority.LANGUID).setWaitForGreenStatus().setWaitForNodes(">=2").setWaitForActiveShards(4).execute().actionGet();
         logger.info("--> done cluster health, status " + clusterHealth.getStatus());
@@ -212,7 +210,7 @@ public class UpdateNumberOfReplicasTests extends AbstractSharedClusterTest {
         logger.info("--> closing another node");
         cluster().ensureAtMostNumNodes(1);
         allowNodes("test", 1);
-        
+
         logger.info("--> running cluster health");
         clusterHealth = client().admin().cluster().prepareHealth().setWaitForEvents(Priority.LANGUID).setWaitForYellowStatus().setWaitForNodes(">=1").setWaitForActiveShards(2).execute().actionGet();
         logger.info("--> done cluster health, status " + clusterHealth.getStatus());

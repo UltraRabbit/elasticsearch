@@ -20,6 +20,7 @@
 package org.elasticsearch;
 
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.inject.AbstractModule;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.lucene.Lucene;
@@ -30,6 +31,7 @@ import java.io.Serializable;
 
 /**
  */
+@SuppressWarnings("deprecation")
 public class Version implements Serializable {
 
     // The logic for ID is: XXYYZZAA, where XX is major version, YY is minor version, ZZ is revision, and AA is Beta/RC indicator
@@ -125,7 +127,7 @@ public class Version implements Serializable {
     public static final int V_0_90_2_ID = /*00*/900299;
     public static final Version V_0_90_2 = new Version(V_0_90_2_ID, false, org.apache.lucene.util.Version.LUCENE_43);
     public static final int V_0_90_3_ID = /*00*/900399;
-    public static final Version V_0_90_3 = new Version(V_0_90_3_ID, true, org.apache.lucene.util.Version.LUCENE_43);
+    public static final Version V_0_90_3 = new Version(V_0_90_3_ID, false, org.apache.lucene.util.Version.LUCENE_44);
 
     public static final Version CURRENT = V_0_90_3;
 
@@ -236,6 +238,13 @@ public class Version implements Serializable {
         out.writeVInt(version.id);
     }
 
+    /**
+     * Returns the smallest version between the 2.
+     */
+    public static Version smallest(Version version1, Version version2) {
+        return version1.id < version2.id ? version1 : version2;
+    }
+
     public final int id;
     public final byte major;
     public final byte minor;
@@ -289,7 +298,7 @@ public class Version implements Serializable {
     }
 
     public static void main(String[] args) {
-        System.out.println("ElasticSearch Version: " + Version.CURRENT + ", JVM: " + JvmInfo.jvmInfo().version() + "(" + JvmInfo.jvmInfo().vmVersion() + ")");
+        System.out.println("Version: " + Version.CURRENT + ", Build: " + Build.CURRENT.hashShort() + "/" + Build.CURRENT.timestamp() + ", JVM: " + JvmInfo.jvmInfo().version());
     }
 
     @Override
@@ -317,5 +326,19 @@ public class Version implements Serializable {
     @Override
     public int hashCode() {
         return id;
+    }
+
+    public static class Module extends AbstractModule {
+
+        private final Version version;
+
+        public Module(Version version) {
+            this.version = version;
+        }
+
+        @Override
+        protected void configure() {
+            bind(Version.class).toInstance(version);
+        }
     }
 }

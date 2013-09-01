@@ -21,19 +21,15 @@ package org.elasticsearch.test.unit.deps.lucene;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.*;
 import org.apache.lucene.search.vectorhighlight.CustomFieldQuery;
-import org.apache.lucene.search.vectorhighlight.FastVectorHighlighter;
+import org.apache.lucene.search.vectorhighlight.XFastVectorHighlighter;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.RAMDirectory;
 import org.elasticsearch.common.lucene.Lucene;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -41,7 +37,6 @@ import static org.hamcrest.Matchers.*;
 /**
  *
  */
-@Test
 public class VectorHighlighterTests {
 
     @Test
@@ -54,13 +49,13 @@ public class VectorHighlighterTests {
         document.add(new Field("content", "the big bad dog", Field.Store.YES, Field.Index.ANALYZED, Field.TermVector.WITH_POSITIONS_OFFSETS));
         indexWriter.addDocument(document);
 
-        IndexReader reader = IndexReader.open(indexWriter, true);
+        IndexReader reader = DirectoryReader.open(indexWriter, true);
         IndexSearcher searcher = new IndexSearcher(reader);
         TopDocs topDocs = searcher.search(new TermQuery(new Term("_id", "1")), 1);
 
         assertThat(topDocs.totalHits, equalTo(1));
 
-        FastVectorHighlighter highlighter = new FastVectorHighlighter();
+        XFastVectorHighlighter highlighter = new XFastVectorHighlighter();
         String fragment = highlighter.getBestFragment(highlighter.getFieldQuery(new TermQuery(new Term("content", "bad"))),
                 reader, topDocs.scoreDocs[0].doc, "content", 30);
         assertThat(fragment, notNullValue());
@@ -77,13 +72,13 @@ public class VectorHighlighterTests {
         document.add(new Field("content", "the big bad dog", Field.Store.YES, Field.Index.ANALYZED, Field.TermVector.WITH_POSITIONS_OFFSETS));
         indexWriter.addDocument(document);
 
-        IndexReader reader = IndexReader.open(indexWriter, true);
+        IndexReader reader = DirectoryReader.open(indexWriter, true);
         IndexSearcher searcher = new IndexSearcher(reader);
         TopDocs topDocs = searcher.search(new TermQuery(new Term("_id", "1")), 1);
 
         assertThat(topDocs.totalHits, equalTo(1));
 
-        FastVectorHighlighter highlighter = new FastVectorHighlighter();
+        XFastVectorHighlighter highlighter = new XFastVectorHighlighter();
 
         PrefixQuery prefixQuery = new PrefixQuery(new Term("content", "ba"));
         assertThat(prefixQuery.getRewriteMethod().getClass().getName(), equalTo(PrefixQuery.CONSTANT_SCORE_AUTO_REWRITE_DEFAULT.getClass().getName()));
@@ -97,16 +92,12 @@ public class VectorHighlighterTests {
                 reader, topDocs.scoreDocs[0].doc, "content", 30);
         assertThat(fragment, notNullValue());
 
-        System.out.println(fragment);
-
         // now check with the custom field query
         prefixQuery = new PrefixQuery(new Term("content", "ba"));
         assertThat(prefixQuery.getRewriteMethod().getClass().getName(), equalTo(PrefixQuery.CONSTANT_SCORE_AUTO_REWRITE_DEFAULT.getClass().getName()));
         fragment = highlighter.getBestFragment(new CustomFieldQuery(prefixQuery, reader, highlighter),
                 reader, topDocs.scoreDocs[0].doc, "content", 30);
         assertThat(fragment, notNullValue());
-
-        System.out.println(fragment);
     }
 
     @Test
@@ -119,13 +110,13 @@ public class VectorHighlighterTests {
         document.add(new Field("content", "the big bad dog", Field.Store.NO, Field.Index.ANALYZED, Field.TermVector.WITH_POSITIONS_OFFSETS));
         indexWriter.addDocument(document);
 
-        IndexReader reader = IndexReader.open(indexWriter, true);
+        IndexReader reader = DirectoryReader.open(indexWriter, true);
         IndexSearcher searcher = new IndexSearcher(reader);
         TopDocs topDocs = searcher.search(new TermQuery(new Term("_id", "1")), 1);
 
         assertThat(topDocs.totalHits, equalTo(1));
 
-        FastVectorHighlighter highlighter = new FastVectorHighlighter();
+        XFastVectorHighlighter highlighter = new XFastVectorHighlighter();
         String fragment = highlighter.getBestFragment(highlighter.getFieldQuery(new TermQuery(new Term("content", "bad"))),
                 reader, topDocs.scoreDocs[0].doc, "content", 30);
         assertThat(fragment, nullValue());
@@ -141,13 +132,13 @@ public class VectorHighlighterTests {
         document.add(new Field("content", "the big bad dog", Field.Store.YES, Field.Index.ANALYZED, Field.TermVector.NO));
         indexWriter.addDocument(document);
 
-        IndexReader reader = IndexReader.open(indexWriter, true);
+        IndexReader reader = DirectoryReader.open(indexWriter, true);
         IndexSearcher searcher = new IndexSearcher(reader);
         TopDocs topDocs = searcher.search(new TermQuery(new Term("_id", "1")), 1);
 
         assertThat(topDocs.totalHits, equalTo(1));
 
-        FastVectorHighlighter highlighter = new FastVectorHighlighter();
+        XFastVectorHighlighter highlighter = new XFastVectorHighlighter();
         String fragment = highlighter.getBestFragment(highlighter.getFieldQuery(new TermQuery(new Term("content", "bad"))),
                 reader, topDocs.scoreDocs[0].doc, "content", 30);
         assertThat(fragment, nullValue());

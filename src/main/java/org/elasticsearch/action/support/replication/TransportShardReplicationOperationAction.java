@@ -24,6 +24,7 @@ import org.elasticsearch.ElasticSearchIllegalStateException;
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.action.*;
 import org.elasticsearch.action.support.TransportAction;
+import org.elasticsearch.action.support.TransportActions;
 import org.elasticsearch.cluster.ClusterChangedEvent;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
@@ -39,11 +40,8 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.index.IndexShardMissingException;
 import org.elasticsearch.index.engine.DocumentAlreadyExistsException;
 import org.elasticsearch.index.engine.VersionConflictEngineException;
-import org.elasticsearch.index.shard.IllegalIndexShardStateException;
-import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.node.NodeClosedException;
 import org.elasticsearch.rest.RestStatus;
@@ -162,26 +160,17 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
     }
 
     protected boolean retryPrimaryException(Throwable e) {
-        Throwable cause = ExceptionsHelper.unwrapCause(e);
-        return cause instanceof IndexShardMissingException ||
-                cause instanceof IllegalIndexShardStateException ||
-                cause instanceof IndexMissingException;
+        return TransportActions.isShardNotAvailableException(e);
     }
 
     /**
      * Should an exception be ignored when the operation is performed on the replica.
      */
     boolean ignoreReplicaException(Throwable e) {
+        if (TransportActions.isShardNotAvailableException(e)) {
+            return true;
+        }
         Throwable cause = ExceptionsHelper.unwrapCause(e);
-        if (cause instanceof IllegalIndexShardStateException) {
-            return true;
-        }
-        if (cause instanceof IndexMissingException) {
-            return true;
-        }
-        if (cause instanceof IndexShardMissingException) {
-            return true;
-        }
         if (cause instanceof ConnectTransportException) {
             return true;
         }
@@ -229,7 +218,7 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
                 public void onFailure(Throwable e) {
                     try {
                         channel.sendResponse(e);
-                    } catch (Exception e1) {
+                    } catch (Throwable e1) {
                         logger.warn("Failed to send response for " + transportAction, e1);
                     }
                 }
@@ -531,7 +520,7 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
             try {
                 PrimaryResponse<Response, ReplicaRequest> response = shardOperationOnPrimary(clusterState, new PrimaryOperationRequest(primaryShardId, request));
                 performReplicas(response);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 // shard has not been allocated yet, retry it here
                 if (retryPrimaryException(e)) {
                     primaryOperationStarted.set(false);
@@ -702,7 +691,7 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
                         public void run() {
                             try {
                                 shardOperationOnReplica(shardRequest);
-                            } catch (Exception e) {
+                            } catch (Throwable e) {
                                 if (!ignoreReplicaException(e)) {
                                     logger.warn("Failed to perform " + transportAction + " on replica " + shardIt.shardId(), e);
                                     shardStateAction.shardFailed(shard, "Failed to perform [" + transportAction + "] on replica, message [" + detailedMessage(e) + "]");
@@ -716,7 +705,7 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
                 } else {
                     try {
                         shardOperationOnReplica(shardRequest);
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         if (!ignoreReplicaException(e)) {
                             logger.warn("Failed to perform " + transportAction + " on replica" + shardIt.shardId(), e);
                             shardStateAction.shardFailed(shard, "Failed to perform [" + transportAction + "] on replica, message [" + detailedMessage(e) + "]");

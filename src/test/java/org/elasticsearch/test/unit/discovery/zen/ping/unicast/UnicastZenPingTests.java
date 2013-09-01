@@ -19,9 +19,11 @@
 
 package org.elasticsearch.test.unit.discovery.zen.ping.unicast;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.cluster.ClusterName;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
+import org.elasticsearch.common.network.NetworkService;
 import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
@@ -30,32 +32,39 @@ import org.elasticsearch.discovery.zen.DiscoveryNodesProvider;
 import org.elasticsearch.discovery.zen.ping.ZenPing;
 import org.elasticsearch.discovery.zen.ping.unicast.UnicastZenPing;
 import org.elasticsearch.node.service.NodeService;
+import org.elasticsearch.test.integration.ElasticsearchTestCase;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.TransportService;
 import org.elasticsearch.transport.netty.NettyTransport;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
 /**
  *
  */
-public class UnicastZenPingTests {
+public class UnicastZenPingTests extends ElasticsearchTestCase {
 
     @Test
     public void testSimplePings() {
+        Settings settings = ImmutableSettings.EMPTY;
+        int startPort = 11000 + randomIntBetween(0, 1000);
+        int endPort = startPort + 10;
+        settings = ImmutableSettings.builder().put(settings).put("transport.tcp.port", startPort + "-" + endPort).build();
+
         ThreadPool threadPool = new ThreadPool();
         ClusterName clusterName = new ClusterName("test");
-        NettyTransport transportA = new NettyTransport(threadPool);
+        NetworkService networkService = new NetworkService(settings);
+
+        NettyTransport transportA = new NettyTransport(settings, threadPool, networkService, Version.CURRENT);
         final TransportService transportServiceA = new TransportService(transportA, threadPool).start();
-        final DiscoveryNode nodeA = new DiscoveryNode("A", transportServiceA.boundAddress().publishAddress());
+        final DiscoveryNode nodeA = new DiscoveryNode("UZP_A", transportServiceA.boundAddress().publishAddress(), Version.CURRENT);
 
         InetSocketTransportAddress addressA = (InetSocketTransportAddress) transportA.boundAddress().publishAddress();
 
-        NettyTransport transportB = new NettyTransport(threadPool);
+        NettyTransport transportB = new NettyTransport(settings, threadPool, networkService, Version.CURRENT);
         final TransportService transportServiceB = new TransportService(transportB, threadPool).start();
-        final DiscoveryNode nodeB = new DiscoveryNode("B", transportServiceA.boundAddress().publishAddress());
+        final DiscoveryNode nodeB = new DiscoveryNode("UZP_B", transportServiceA.boundAddress().publishAddress(), Version.CURRENT);
 
         InetSocketTransportAddress addressB = (InetSocketTransportAddress) transportB.boundAddress().publishAddress();
 
@@ -64,11 +73,11 @@ public class UnicastZenPingTests {
                 addressB.address().getAddress().getHostAddress() + ":" + addressB.address().getPort())
                 .build();
 
-        UnicastZenPing zenPingA = new UnicastZenPing(hostsSettings, threadPool, transportServiceA, clusterName, null);
+        UnicastZenPing zenPingA = new UnicastZenPing(hostsSettings, threadPool, transportServiceA, clusterName, Version.CURRENT, null);
         zenPingA.setNodesProvider(new DiscoveryNodesProvider() {
             @Override
             public DiscoveryNodes nodes() {
-                return DiscoveryNodes.newNodesBuilder().put(nodeA).localNodeId("A").build();
+                return DiscoveryNodes.newNodesBuilder().put(nodeA).localNodeId("UZP_A").build();
             }
 
             @Override
@@ -78,11 +87,11 @@ public class UnicastZenPingTests {
         });
         zenPingA.start();
 
-        UnicastZenPing zenPingB = new UnicastZenPing(hostsSettings, threadPool, transportServiceB, clusterName, null);
+        UnicastZenPing zenPingB = new UnicastZenPing(hostsSettings, threadPool, transportServiceB, clusterName, Version.CURRENT, null);
         zenPingB.setNodesProvider(new DiscoveryNodesProvider() {
             @Override
             public DiscoveryNodes nodes() {
-                return DiscoveryNodes.newNodesBuilder().put(nodeB).localNodeId("B").build();
+                return DiscoveryNodes.newNodesBuilder().put(nodeB).localNodeId("UZP_B").build();
             }
 
             @Override
@@ -95,7 +104,7 @@ public class UnicastZenPingTests {
         try {
             ZenPing.PingResponse[] pingResponses = zenPingA.pingAndWait(TimeValue.timeValueSeconds(1));
             assertThat(pingResponses.length, equalTo(1));
-            assertThat(pingResponses[0].target().id(), equalTo("B"));
+            assertThat(pingResponses[0].target().id(), equalTo("UZP_B"));
         } finally {
             zenPingA.close();
             zenPingB.close();
